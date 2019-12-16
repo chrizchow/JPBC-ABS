@@ -15,7 +15,14 @@ public class Main {
     private Field G1, G2, Gt, Zr;
     private Element x;              // master key
     private Element g, g1, g2, Z;   // public elements
-    private int d;                  // (d-1) polynomial degree (d attributes)
+
+    private Element sigma0, h2ms, sigma_prime;    // signature
+    ArrayList<Element> sigma_is;                  // signature
+
+    // Private Key for testing:
+    private int d = 3;              // (d-1) polynomial degree (d attributes)
+    String [] attrs = { "one", "two", "three" };
+    private ArrayList<ABSPrivKeyComp> privKey;
 
     BigInteger r = new BigInteger("730750818665451621361119245571504901405976559617");
 
@@ -78,6 +85,7 @@ public class Main {
             comp.qi = Zr.newElement();
             if (i == 0) comp.qi.set(x);
             else comp.qi.setToRandom();
+            System.out.println("qi = "+comp.qi);
 
             // Save attr for future reference:
             comp.attr = attrs[i];
@@ -89,25 +97,122 @@ public class Main {
             elementFromString(hashed, attrs[i]);
             hashed.powZn(ri);
             comp.di0.mul(hashed);
+            System.out.println("di0 = "+comp.di0);
 
             // Set di1 = g^ri, where ri is random:
             comp.di1 = G1.newElement();
             comp.di1.set(g);
             comp.di1.powZn(ri);
-
+            comps.add(comp);
+            System.out.println("di1 = "+comp.di1+"\n");
         }
+        privKey = comps;
+    }
+
+    public void sign(String message, ArrayList<ABSPrivKeyComp> privKey) throws NoSuchAlgorithmException {
+
+        // Proposition:
+        // To prove having at least k attributes among n-elements.
+        // since we want to make sure all attributes (d-1) are there,
+        // we set threshold (k = d - 1) and (n = d - 1).
+
+        // omega prime = ( d - k ) = ( d - k + 1 ) = 1
+        // choose ( n + d - k ) = n + 1 = d random values
+
+        // calculate first part of σ0:
+        Element pi_di0_pow_delta = G2.newElement(1);
+        ArrayList<BigInteger> deltas = new ArrayList<>();
+        for (int i=0; i<privKey.size(); i++)
+        {
+            // calculate delta (Lagrange coefficient):
+            BigInteger delta_iS0 = BigInteger.ONE;
+            for (int eta=0; eta<privKey.size(); eta++)
+            {
+                if (i != eta){    // make sure eta element is not j
+                    BigInteger etaValue = privKey.get(eta).qi.toBigInteger();
+                    BigInteger numerator = BigInteger.ZERO.subtract(etaValue);
+                    BigInteger denominator = privKey.get(i).qi.toBigInteger().subtract(etaValue);
+                    delta_iS0 = delta_iS0.multiply(numerator.divide(denominator));
+                    System.out.println("etaValue = "+etaValue);
+                    System.out.println("delta_iS0 = "+delta_iS0);
+                    deltas.add(delta_iS0);  // save for later use
+                }
+            }
+            // Power di_0 with delta:
+            Element di_0_pow_delta = G2.newElement(privKey.get(i).di0);
+            di_0_pow_delta.pow(delta_iS0);
+            // multiply to pi:
+            pi_di0_pow_delta.mul(di_0_pow_delta);
+            System.out.println("pi_di0_pow_delta = "+pi_di0_pow_delta+"\n");
+        }
+
+        // calculate the second part of σ0:
+        Element pi_hashed_pow_rp = G2.newElement();
+        ArrayList<Element> r_primes = new ArrayList<>();
+        for (int i=0; i<privKey.size(); i++) {
+            // calculate hash:
+            Element hashed = G2.newElement();
+            elementFromString(hashed, privKey.get(i).attr);
+            // generate random r':
+            Element r_prime = Zr.newRandomElement();
+            r_primes.add(r_prime);  // for later use
+            // Power hash with r':
+            Element hashed_pow_rp = G2.newElement(hashed);
+            hashed_pow_rp.powZn(r_prime);
+            // multiply to pi:
+            pi_hashed_pow_rp.mul(hashed_pow_rp);
+        }
+
+        // calculate σ0:
+        sigma0 = G2.newElement();
+        sigma0.set(pi_di0_pow_delta);
+        sigma0.mul(pi_hashed_pow_rp);
+        System.out.println("σ0 = "+sigma0);
+
+        // generate random s:
+        Element s = Zr.newRandomElement();
+        h2ms = G2.newElement();
+
+        // calculate H2(m)^s:
+        elementFromString(h2ms, message);
+        h2ms.powZn(s);
+        System.out.println("h2ms = "+h2ms+"\n");
+
+        // calculate σi:
+        sigma_is = new ArrayList<>();
+        for (int i=0; i<privKey.size(); i++) {
+            Element sigma_i = G1.newElement();
+            // Power di_1 with delta:
+            Element di_1_pow_delta = G2.newElement(privKey.get(i).di1);
+            di_1_pow_delta.pow(deltas.get(i));
+            // Power g with r':
+            Element g_pow_rp = G1.newElement(g);
+            g_pow_rp.powZn(r_primes.get(i));
+            // multiply to get sigma_i:
+            sigma_i.mul(di_1_pow_delta);
+            sigma_i.mul(g_pow_rp);
+            System.out.println("σ"+i+" = "+sigma_i+"\n");
+        }
+
+        // calculate σ':
+        sigma_prime = G1.newElement(g);
+        sigma_prime.powZn(s);
+        System.out.println("σ' = "+sigma_prime);
 
     }
 
     public static void main (String args[]) throws Exception {
-        System.out.println("Hello World");
+        System.out.println("Hello World\n");
 
         Main object = new Main();
         object.setup();
-        System.out.println(object.x.toBigInteger());
+        System.out.println("Master Key: " + object.x.toBigInteger()+"\n");
 
-        object.d = 2;
-        String [] attrs = { "one", "two" };
-        object.extract(attrs);
+        object.extract(object.attrs);
+        System.out.println("Private Key Generated\n");
+
+        object.sign("I go to school by bus", object.privKey);
+        System.out.println("Signature Generated");
+
     }
 }
