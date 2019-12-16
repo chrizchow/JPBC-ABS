@@ -130,22 +130,20 @@ public class Main {
     }
 
     // ====================== Signature ======================
-    private static void lagrangeCoef(Element r, ArrayList<Integer> s, int i) {
-        int j, k;
-        Element t;
+    private static void lagrangeCoef(Element r, ArrayList<BigInteger> s, BigInteger i) {
 
-        t = r.duplicate();
-
+        Element t = r.duplicate();
         r.setToOne();
-        for (k = 0; k < s.size(); k++) {
-            j = s.get(k).intValue();
-            if (j == i)
+
+        for (int k = 0; k < s.size(); k++) {
+            BigInteger j = s.get(k);            // η (eta)
+            if (j.equals(i))
                 continue;
-            t.set(-j);
-            r.mul(t); /* num_muls++; */
-            t.set(i - j);
-            t.invert();
-            r.mul(t); /* num_muls++; */
+            t.set(BigInteger.ZERO.subtract(j)); // t = -η
+            r.mul(t);                           // r = -η
+            t.set(i.subtract(j));               // t = i-η
+            t.invert();                         // t = 1/(i-η)
+            r.mul(t);                           // r = -η/(i-η)
         }
     }
 
@@ -161,30 +159,29 @@ public class Main {
 
         // calculate first part of σ0:
         Element pi_di0_pow_delta = G2.newElement(1);
-        ArrayList<BigInteger> deltas = new ArrayList<>();
-        for (int i=0; i<privKey.size(); i++)
-        {
-            // calculate delta (Lagrange coefficient):
-            BigInteger delta_iS0 = BigInteger.ONE;
-            for (int eta=0; eta<privKey.size(); eta++)
-            {
-                if (i != eta){    // make sure eta element is not j
-                    BigInteger etaValue = privKey.get(eta).qi.toBigInteger();
-                    BigInteger numerator = BigInteger.ZERO.subtract(etaValue);
-                    BigInteger denominator = privKey.get(i).qi.toBigInteger().subtract(etaValue);
-                    delta_iS0 = delta_iS0.multiply(numerator.divide(denominator));
-                    System.out.println("etaValue = "+etaValue);
-                    System.out.println("delta_iS0 = "+delta_iS0);
-                }
-            }
-            deltas.add(delta_iS0);  // save delta for later use
+        ArrayList<Element> deltas = new ArrayList<>();
+
+        // get the polynomial list:
+        ArrayList <BigInteger> poly = new ArrayList<>();
+        for (int i=0; i<privKey.size(); i++) {
+            poly.add(privKey.get(i).qi.toBigInteger());
+        }
+
+        // run the lagrange:
+        for (int i=0; i<privKey.size(); i++) {
+            // calculate ∆i,S(0) (aka delta):
+            Element delta = Zr.newElement();
+            lagrangeCoef(delta, poly, privKey.get(i).qi.toBigInteger());
+            System.out.println("∆i,S("+i+"): "+delta);
+            deltas.add(delta); // save for later use
             // Power di_0 with delta:
-            Element di_0_pow_delta = G2.newElement(privKey.get(i).di0);
-            di_0_pow_delta.pow(delta_iS0);
+            Element di_0_pow_delta = privKey.get(i).di0.duplicate();
+            di_0_pow_delta.powZn(delta);
+            System.out.println("d"+i+"0^(∆i,S("+i+")): "+di_0_pow_delta);
             // multiply to pi:
             pi_di0_pow_delta.mul(di_0_pow_delta);
-            System.out.println("pi_di0_pow_delta = "+pi_di0_pow_delta+"\n");
         }
+        System.out.println();
 
         // calculate the second part of σ0:
         Element pi_hashed_pow_rp = G2.newElement();
@@ -216,7 +213,7 @@ public class Main {
         // calculate H2(m)^s:
         elementFromString(h2ms, message);
         h2ms.powZn(s);
-        System.out.println("h2ms = "+h2ms+"\n");
+        System.out.println("H2(m)^s = "+h2ms+"\n");
 
         // calculate σi:
         sigma_is = new ArrayList<>();
@@ -224,16 +221,17 @@ public class Main {
             Element sigma_i = G1.newElement();
             // Power di_1 with delta:
             Element di_1_pow_delta = G2.newElement(privKey.get(i).di1);
-            di_1_pow_delta.pow(deltas.get(i));
+            di_1_pow_delta.powZn(deltas.get(i));
             // Power g with r':
             Element g_pow_rp = G1.newElement(g);
             g_pow_rp.powZn(r_primes.get(i));
             // multiply to get sigma_i:
             sigma_i.mul(di_1_pow_delta);
             sigma_i.mul(g_pow_rp);
-            System.out.println("σ"+i+" = "+sigma_i+"\n");
+            System.out.println("σ"+i+" = "+sigma_i);
             sigma_is.add(sigma_i);  // save for later use
         }
+        System.out.println();
 
         // calculate σ':
         sigma_prime = G1.newElement(g);
@@ -248,6 +246,7 @@ public class Main {
         Element numerator = pairing.pairing(g, sigma0);
         // calculate pi(e(H(i), σi)):
         Element pi_hi_sigmai_pair = Gt.newElement();
+        pi_hi_sigmai_pair.setToOne();
         for (int i=0; i<attrs.length; i++) {
             // calculate H(i):
             Element hashed = G1.newElement();
@@ -255,20 +254,18 @@ public class Main {
             // calculate e(H(i), σi):
             Element hi_sigmai_pair = pairing.pairing(hashed, sigma_is.get(i));
             // multiply to pi:
-            System.out.println("hi_sigmai_pair = "+hi_sigmai_pair);
             pi_hi_sigmai_pair.mul(hi_sigmai_pair);
         }
         // calculate e(H(m), σ'0):
         Element hashed_message = G1.newElement();
         elementFromString(hashed_message, message);
         Element denominator = pairing.pairing(hashed_message, sigma_prime);
-        // multiply together:
+        // multiply together to get pi(e(H(i), σi))*e(H(m), σ'0):
         denominator.mul(pi_hi_sigmai_pair);
 
         // result of numerator/denominator:
-        Element Z_prime = Gt.newElement(numerator);
+        Element Z_prime = numerator.duplicate();
         Z_prime.div(denominator);
-        System.out.println("==============");
         System.out.println("Z' = "+Z_prime);
         System.out.println("Z  = "+Z);
 
@@ -280,14 +277,17 @@ public class Main {
         object.setup();
         object.checkup();
 
+        System.out.println("==============");
         object.extract(object.attrs);
         System.out.println("Private Key Generated\n");
 
+        System.out.println("==============");
         object.sign("I go to school by bus", object.privKey);
-        System.out.println("Signature Generated");
+        System.out.println("Signature Generated\n");
 
+        System.out.println("==============");
         object.verify("I go to school by bus");
-        System.out.println("Signature Verified");
+        System.out.println("Signature Verified\n");
 
     }
 }
