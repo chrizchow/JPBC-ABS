@@ -4,6 +4,7 @@ import it.unisa.dia.gas.jpbc.Field;
 import it.unisa.dia.gas.jpbc.Pairing;
 import it.unisa.dia.gas.plaf.jpbc.pairing.PairingFactory;
 
+import javax.sound.midi.SysexMessage;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -60,6 +61,21 @@ public class Main {
 
     }
 
+    // ============================ Check ============================
+    private void checkup() {
+        System.out.println("============== Parameters Check ==============");
+        System.out.println("G1: "+G1);
+        System.out.println("G2: "+G2);
+        System.out.println("Gt: "+Gt);
+        System.out.println("Zr: "+Zr);
+        System.out.println("x: "+x+" (Master Key)");
+        System.out.println("g: "+g);
+        System.out.println("g1: "+g1);
+        System.out.println("g2: "+g2);
+        System.out.println("Z: "+Z);
+        System.out.println("=============================================\n");
+    }
+
     // ============================ Keygen ============================
     private static void elementFromString(Element h, String s)
             throws NoSuchAlgorithmException {
@@ -85,7 +101,6 @@ public class Main {
             comp.qi = Zr.newElement();
             if (i == 0) comp.qi.set(x);
             else comp.qi.setToRandom();
-            System.out.println("qi = "+comp.qi);
 
             // Save attr for future reference:
             comp.attr = attrs[i];
@@ -97,16 +112,41 @@ public class Main {
             elementFromString(hashed, attrs[i]);
             hashed.powZn(ri);
             comp.di0.mul(hashed);
-            System.out.println("di0 = "+comp.di0);
 
             // Set di1 = g^ri, where ri is random:
             comp.di1 = G1.newElement();
             comp.di1.set(g);
             comp.di1.powZn(ri);
             comps.add(comp);
-            System.out.println("di1 = "+comp.di1+"\n");
+
+            // show debug message:
+            System.out.println("attr = "+comp.attr);
+            System.out.println("q("+i+") = "+comp.qi);
+            System.out.println("d"+i+"0 = "+comp.di0);
+            System.out.println("d"+i+"1 = "+comp.di1+"\n");
         }
         privKey = comps;
+        System.out.println("=============================================\n"); // debug
+    }
+
+    // ====================== Signature ======================
+    private static void lagrangeCoef(Element r, ArrayList<Integer> s, int i) {
+        int j, k;
+        Element t;
+
+        t = r.duplicate();
+
+        r.setToOne();
+        for (k = 0; k < s.size(); k++) {
+            j = s.get(k).intValue();
+            if (j == i)
+                continue;
+            t.set(-j);
+            r.mul(t); /* num_muls++; */
+            t.set(i - j);
+            t.invert();
+            r.mul(t); /* num_muls++; */
+        }
     }
 
     public void sign(String message, ArrayList<ABSPrivKeyComp> privKey) throws NoSuchAlgorithmException {
@@ -135,9 +175,9 @@ public class Main {
                     delta_iS0 = delta_iS0.multiply(numerator.divide(denominator));
                     System.out.println("etaValue = "+etaValue);
                     System.out.println("delta_iS0 = "+delta_iS0);
-                    deltas.add(delta_iS0);  // save for later use
                 }
             }
+            deltas.add(delta_iS0);  // save delta for later use
             // Power di_0 with delta:
             Element di_0_pow_delta = G2.newElement(privKey.get(i).di0);
             di_0_pow_delta.pow(delta_iS0);
@@ -192,6 +232,7 @@ public class Main {
             sigma_i.mul(di_1_pow_delta);
             sigma_i.mul(g_pow_rp);
             System.out.println("σ"+i+" = "+sigma_i+"\n");
+            sigma_is.add(sigma_i);  // save for later use
         }
 
         // calculate σ':
@@ -201,18 +242,52 @@ public class Main {
 
     }
 
-    public static void main (String args[]) throws Exception {
-        System.out.println("Hello World\n");
+    // ====================== Verification ======================
+    public void verify(String message) throws NoSuchAlgorithmException {
+        // calculate e(g, σ0):
+        Element numerator = pairing.pairing(g, sigma0);
+        // calculate pi(e(H(i), σi)):
+        Element pi_hi_sigmai_pair = Gt.newElement();
+        for (int i=0; i<attrs.length; i++) {
+            // calculate H(i):
+            Element hashed = G1.newElement();
+            elementFromString(hashed, attrs[i]);
+            // calculate e(H(i), σi):
+            Element hi_sigmai_pair = pairing.pairing(hashed, sigma_is.get(i));
+            // multiply to pi:
+            System.out.println("hi_sigmai_pair = "+hi_sigmai_pair);
+            pi_hi_sigmai_pair.mul(hi_sigmai_pair);
+        }
+        // calculate e(H(m), σ'0):
+        Element hashed_message = G1.newElement();
+        elementFromString(hashed_message, message);
+        Element denominator = pairing.pairing(hashed_message, sigma_prime);
+        // multiply together:
+        denominator.mul(pi_hi_sigmai_pair);
 
+        // result of numerator/denominator:
+        Element Z_prime = Gt.newElement(numerator);
+        Z_prime.div(denominator);
+        System.out.println("==============");
+        System.out.println("Z' = "+Z_prime);
+        System.out.println("Z  = "+Z);
+
+    }
+
+    public static void main (String args[]) throws Exception {
+        System.out.println("Hello World");
         Main object = new Main();
         object.setup();
-        System.out.println("Master Key: " + object.x.toBigInteger()+"\n");
+        object.checkup();
 
         object.extract(object.attrs);
         System.out.println("Private Key Generated\n");
 
         object.sign("I go to school by bus", object.privKey);
         System.out.println("Signature Generated");
+
+        object.verify("I go to school by bus");
+        System.out.println("Signature Verified");
 
     }
 }
