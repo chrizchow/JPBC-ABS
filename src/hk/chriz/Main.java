@@ -17,7 +17,7 @@ public class Main {
     private Element x;              // master key
     private Element g, g1, g2, Z;   // public elements
 
-    private Element sigma0, h2ms, sigma_prime;    // signature
+    private Element sigma0, sigma_prime;          // signature
     ArrayList<Element> sigma_is;                  // signature
 
     // Private Key for testing:
@@ -134,7 +134,6 @@ public class Main {
 
         Element t = r.duplicate();
         r.setToOne();
-
         for (int k = 0; k < s.size(); k++) {
             BigInteger j = s.get(k);            // η (eta)
             if (j.equals(i))
@@ -157,6 +156,9 @@ public class Main {
         // omega prime = ( d - k ) = ( d - k + 1 ) = 1
         // choose ( n + d - k ) = n + 1 = d random values
 
+        // generate random s:
+        Element s = Zr.newRandomElement();
+
         // calculate first part of σ0:
         Element pi_di0_pow_delta = G2.newElement(1);
         ArrayList<Element> deltas = new ArrayList<>();
@@ -165,6 +167,7 @@ public class Main {
         ArrayList <BigInteger> poly = new ArrayList<>();
         for (int i=0; i<privKey.size(); i++) {
             poly.add(privKey.get(i).qi.toBigInteger());
+            System.out.println("inserted: "+poly.get(i));
         }
 
         // run the lagrange:
@@ -181,6 +184,7 @@ public class Main {
             // multiply to pi:
             pi_di0_pow_delta.mul(di_0_pow_delta);
         }
+
         System.out.println();
 
         // calculate the second part of σ0:
@@ -200,20 +204,19 @@ public class Main {
             pi_hashed_pow_rp.mul(hashed_pow_rp);
         }
 
+        // calculate the third part of σ0 (H2(m)^s):
+        Element h2ms = G1.newElement();
+        elementFromString(h2ms, message);
+        h2ms.powZn(s);
+        System.out.println("H2(m)^s = "+h2ms);
+
         // calculate σ0:
         sigma0 = G2.newElement();
         sigma0.set(pi_di0_pow_delta);
         sigma0.mul(pi_hashed_pow_rp);
+        sigma0.mul(h2ms);
         System.out.println("σ0 = "+sigma0);
-
-        // generate random s:
-        Element s = Zr.newRandomElement();
-        h2ms = G2.newElement();
-
-        // calculate H2(m)^s:
-        elementFromString(h2ms, message);
-        h2ms.powZn(s);
-        System.out.println("H2(m)^s = "+h2ms+"\n");
+        System.out.println();
 
         // calculate σi:
         sigma_is = new ArrayList<>();
@@ -226,7 +229,7 @@ public class Main {
             Element g_pow_rp = G1.newElement(g);
             g_pow_rp.powZn(r_primes.get(i));
             // multiply to get sigma_i:
-            sigma_i.mul(di_1_pow_delta);
+            sigma_i.set(di_1_pow_delta);
             sigma_i.mul(g_pow_rp);
             System.out.println("σ"+i+" = "+sigma_i);
             sigma_is.add(sigma_i);  // save for later use
@@ -234,7 +237,7 @@ public class Main {
         System.out.println();
 
         // calculate σ':
-        sigma_prime = G1.newElement(g);
+        sigma_prime = g.duplicate();
         sigma_prime.powZn(s);
         System.out.println("σ' = "+sigma_prime);
 
@@ -271,8 +274,9 @@ public class Main {
 
     }
 
-    public static void main (String args[]) throws Exception {
-        System.out.println("Hello World");
+    public static void main (String [] args) throws Exception {
+        String message = "Hello World";
+        System.out.println(message);
         Main object = new Main();
         object.setup();
         object.checkup();
@@ -282,11 +286,11 @@ public class Main {
         System.out.println("Private Key Generated\n");
 
         System.out.println("==============");
-        object.sign("I go to school by bus", object.privKey);
+        object.sign(message, object.privKey);
         System.out.println("Signature Generated\n");
 
         System.out.println("==============");
-        object.verify("I go to school by bus");
+        object.verify(message);
         System.out.println("Signature Verified\n");
 
     }
