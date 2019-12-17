@@ -251,10 +251,10 @@ public class Main {
         // calculate pi(e(H(i), σi)):
         Element pi_hi_sigmai_pair = Gt.newElement();
         pi_hi_sigmai_pair.setToOne();
-        for (int i=0; i<attrs.length; i++) {
+        for (int i=0; i<sigma_is.size(); i++) {
             // calculate H(i):
             Element hashed = G1.newElement();
-            elementFromString(hashed, attrs[i]);
+            elementFromString(hashed, attrs[i]);    // the order should be same as sigma_is
             // calculate e(H(i), σi):
             Element hi_sigmai_pair = pairing.pairing(hashed, sigma_is.get(i));
             // multiply to pi:
