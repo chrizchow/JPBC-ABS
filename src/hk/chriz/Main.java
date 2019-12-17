@@ -22,7 +22,7 @@ public class Main {
 
     // Attributes
     //String [] attrs = { "one" };
-    String [] attrs = { "one", "two" };
+    String [] attrs = { "one", "two", "three", "four", "five", "six", "seven" };
     private int d = attrs.length + 1;       // (d-1) attributes = (d-1) polynomial degree = d points
 
     // Private Key for testing:
@@ -92,7 +92,7 @@ public class Main {
     public void extract(String [] attrs) throws NoSuchAlgorithmException {
         ArrayList<ABSPrivKeyComp> comps = new ArrayList<>();
 
-        for (int i=0; i<attrs.length; i++)
+        for (int i=0; i<attrs.length-2; i++)    // ω = one to five
         {
             ABSPrivKeyComp comp = new ABSPrivKeyComp();
             Element hashed = G2.newElement();
@@ -166,13 +166,13 @@ public class Main {
 
         // get the polynomial list:
         ArrayList <BigInteger> poly = new ArrayList<>();
-        for (int i=0; i<privKey.size(); i++) {
+        for (int i=0; i<(privKey.size()-3); i++) {      // ω' = one to two
             poly.add(privKey.get(i).qi.toBigInteger());
             System.out.println("inserted: "+poly.get(i));
         }
 
         // run the lagrange:
-        for (int i=0; i<privKey.size(); i++) {
+        for (int i=0; i<(privKey.size()-3); i++) {      // ω' = one to two
             // calculate ∆i,S(0) (aka delta):
             Element delta = Zr.newElement();
             lagrangeCoef(delta, poly, privKey.get(i).qi.toBigInteger());
@@ -186,12 +186,10 @@ public class Main {
             pi_di0_pow_delta.mul(di_0_pow_delta);
         }
 
-        System.out.println();
-
         // calculate the second part of σ0:
         Element pi_hashed_pow_rp = G2.newElement();
         ArrayList<Element> r_primes = new ArrayList<>();
-        for (int i=0; i<privKey.size(); i++) {
+        for (int i=0; i<(privKey.size()-2); i++) {      // ω* = one to three
             // calculate hash:
             Element hashed = G2.newElement();
             elementFromString(hashed, privKey.get(i).attr);
@@ -221,7 +219,7 @@ public class Main {
 
         // calculate σi:
         sigma_is = new ArrayList<>();
-        for (int i=0; i<privKey.size(); i++) {
+        for (int i=0; i<(privKey.size()-3); i++) {      // ω' = one to two
             Element sigma_i = G1.newElement();
             // Power di_1 with delta:
             Element di_1_pow_delta = G2.newElement(privKey.get(i).di1);
@@ -232,9 +230,14 @@ public class Main {
             // multiply to get sigma_i:
             sigma_i.set(di_1_pow_delta);
             sigma_i.mul(g_pow_rp);
-            System.out.println("σ"+i+" = "+sigma_i);
+            System.out.println("σ" + i + " = " + sigma_i);
             sigma_is.add(sigma_i);  // save for later use
         }
+        // ω* / ω' = three
+        Element sigma_i2 = g.duplicate();
+        sigma_i2.powZn(r_primes.get(2));
+        System.out.println("* σ2 = "+sigma_i2);
+        sigma_is.add(sigma_i2);  // save for later use
         System.out.println();
 
         // calculate σ':
@@ -251,7 +254,7 @@ public class Main {
         // calculate pi(e(H(i), σi)):
         Element pi_hi_sigmai_pair = Gt.newElement();
         pi_hi_sigmai_pair.setToOne();
-        for (int i=0; i<attrs.length; i++) {
+        for (int i=0; i<sigma_is.size(); i++) {
             // calculate H(i):
             Element hashed = G1.newElement();
             elementFromString(hashed, attrs[i]);
@@ -259,6 +262,7 @@ public class Main {
             Element hi_sigmai_pair = pairing.pairing(hashed, sigma_is.get(i));
             // multiply to pi:
             pi_hi_sigmai_pair.mul(hi_sigmai_pair);
+            System.out.println("σ"+i+" calculated...");
         }
         // calculate e(H(m), σ'0):
         Element hashed_message = G1.newElement();
