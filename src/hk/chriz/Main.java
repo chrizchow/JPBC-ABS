@@ -20,9 +20,12 @@ public class Main {
     private Element sigma0, sigma_prime;          // signature
     ArrayList<Element> sigma_is;                  // signature
 
+    // Attributes
+    //String [] attrs = { "one" };
+    String [] attrs = { "one", "two" };
+    private int d = attrs.length + 1;       // (d-1) attributes = (d-1) polynomial degree = d points
+
     // Private Key for testing:
-    private int d = 3;              // (d-1) polynomial degree (d attributes)
-    String [] attrs = { "one", "two", "three" };
     private ArrayList<ABSPrivKeyComp> privKey;
 
     BigInteger r = new BigInteger("730750818665451621361119245571504901405976559617");
@@ -43,10 +46,8 @@ public class Main {
         // Set g = random generator:
         g = G1.newRandomElement();
 
-        // Set x = random with Z*r (elements co-prime with n):
-        do {
-            x = Zr.newRandomElement();
-            System.out.println("Calculating x.gcd(r) = "+x.toBigInteger().gcd(r));
+        // Set x = random with Z*r (it must be co-prime with n):
+        do { x = Zr.newRandomElement();
         } while (x.toBigInteger().gcd(r).compareTo(BigInteger.ONE) != 0);
 
         // Set g1 = g^x:
