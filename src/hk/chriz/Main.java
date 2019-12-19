@@ -31,8 +31,10 @@ public class Main {
         System.out.println("=== Signature Generated ===\n");
 
         // Verify signature based on attributes and message:
-        abs.verify(message, attrs, signature);
-        System.out.println("=== Signature Verified ===\n");
+        if (abs.verify(message, attrs, signature))
+            System.out.println("=== Signature is VALID ===\n");
+        else
+            System.out.println("\"=== Signature is INVALID ===\n");
 
     }
 }

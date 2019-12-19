@@ -193,7 +193,7 @@ public class ABS {
         return sign;
     }
 
-    public void verify(String message, String [] attrs, ABSSignatureComp sign) throws NoSuchAlgorithmException {
+    public boolean verify(String message, String [] attrs, ABSSignatureComp sign) throws NoSuchAlgorithmException {
 
         Element sigma0 = sign.sigma0;
         Element sigma_prime = sign.sigma_prime;
@@ -202,7 +202,7 @@ public class ABS {
         // make sure the size is same:
         if (sigma_is.size() != attrs.length) {
             System.out.println("Either attribute or signature is corrupted!");
-            return;
+            return false;
         }
 
         // calculate e(g, σ0):
@@ -231,11 +231,7 @@ public class ABS {
         Z_prime.div(denominator);
         System.out.println("Z' = "+Z_prime);
         System.out.println("Z  = "+pubParam.Z);
-        if (Z_prime.isEqual(pubParam.Z)) {
-            System.out.println("Verified signature is valid !!!");
-        } else {
-            System.out.println("Signature is invalid...");
-        }
+        return Z_prime.isEqual(pubParam.Z);
 
     }
 
