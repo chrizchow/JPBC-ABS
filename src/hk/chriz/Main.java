@@ -10,7 +10,8 @@ public class Main {
 
         // Attributes:
         //String [] attrs = { "apple" };
-        String [] attrs = { "apple", "orange" };
+        //String [] attrs = { "apple", "orange" };
+        String [] attrs = { "apple", "orange", "peach" };
 
         // Message:
         String message = "Hello World";

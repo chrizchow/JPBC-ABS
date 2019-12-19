@@ -3,7 +3,6 @@ package hk.chriz;
 import it.unisa.dia.gas.jpbc.Element;
 import it.unisa.dia.gas.plaf.jpbc.pairing.PairingFactory;
 
-import java.lang.annotation.ElementType;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -25,6 +24,7 @@ public class ABS {
         // Initialise Pairing and its Parameters:
         pubParam = new ABSPubKeyComp();
         pubParam.pairing = PairingFactory.getPairing("a.properties"); // read parameters from file
+        BigInteger r = new BigInteger("730750818665451621361119245571504901405976559617");
         PairingFactory.getInstance().setUsePBCWhenPossible(true);
 
         // just for convenience:
@@ -38,7 +38,7 @@ public class ABS {
 
         // Set master key x = random with Z*r (it must be co-prime with n):
         do { x = pubParam.Zr.newRandomElement();
-        } while (x.toBigInteger().gcd(pubParam.r).compareTo(BigInteger.ONE) != 0);
+        } while (x.toBigInteger().gcd(r).compareTo(BigInteger.ONE) != 0);
 
         // Set g1 = g^x:
         pubParam.g1 = pubParam.g.duplicate();
@@ -62,16 +62,16 @@ public class ABS {
             Element ri = pubParam.Zr.newRandomElement();
 
             // Set polynomial which q(0)=x, q(i)=random:
-            comp.qi = pubParam.Zr.newElement();
-            if (i == 0) comp.qi.set(x);
-            else comp.qi.setToRandom();
+            Element qi = pubParam.Zr.newElement();
+            if (i == 0) qi.set(x);
+            else qi.setToRandom();
 
             // Save attr for future reference:
             comp.attr = attrs[i];
 
             // Set di0 = g2^(q(i))*(H(i))^(ri), where ri is random:
             comp.di0 = pubParam.g2.duplicate();
-            comp.di0.powZn(comp.qi);
+            comp.di0.powZn(qi);
             elementFromString(hashed, attrs[i]);
             hashed.powZn(ri);
             comp.di0.mul(hashed);
@@ -83,7 +83,7 @@ public class ABS {
 
             // show debug message:
             System.out.println("attr = "+comp.attr);
-            System.out.println("q("+i+") = "+comp.qi);
+            System.out.println("q("+i+") = "+qi);
             System.out.println("d"+i+"0 = "+comp.di0);
             System.out.println("d"+i+"1 = "+comp.di1+"\n");
         }
@@ -97,10 +97,6 @@ public class ABS {
         // We select the first element as default attribute subset Ω'
         // and generate n+d-k = d random values.
 
-        //  the private key set appended with Ω':
-        ArrayList<ABSPrivKeyComp> set_union_omega = (ArrayList<ABSPrivKeyComp>) privKey.clone();
-        //set_union_omega.add(privKey.get(0));
-
         // Signature will be stored at:
         ABSSignatureComp sign = new ABSSignatureComp();
 
@@ -109,7 +105,7 @@ public class ABS {
 
         // generate d of random r':
         ArrayList<Element> r_primes = new ArrayList<>();
-        for (int i=0; i<set_union_omega.size(); i++) {
+        for (int i=0; i<privKey.size(); i++) {
             r_primes.add(pubParam.Zr.newRandomElement());
             System.out.println("generated r"+i+"' = "+r_primes.get(i));
         }
@@ -117,8 +113,9 @@ public class ABS {
 
         // get the polynomial list with d random values:
         ArrayList <BigInteger> poly = new ArrayList<>();
-        for (int i=0; i<set_union_omega.size()+1; i++) {
-            poly.add(pubParam.Zr.newRandomElement().toBigInteger());
+        for (int i=0; i<privKey.size()+1; i++) {
+            if (i==0) poly.add(BigInteger.ZERO);
+            else poly.add(pubParam.Zr.newRandomElement().toBigInteger());
             //poly.add(set_union_omega.get(i).qi.toBigInteger());
             System.out.println("generated q("+i+") = "+poly.get(i));
         }
@@ -126,10 +123,9 @@ public class ABS {
 
         // get the lagrange coefficient ∆i,S(0) based on the polynomial (aka delta):
         ArrayList<Element> deltas = new ArrayList<>();
-        for (int i=0; i<set_union_omega.size(); i++) {
+        for (int i=0; i<privKey.size(); i++) {
             Element delta = pubParam.Zr.newElement();
             lagrangeCoef(delta, poly, poly.get(i));
-            //delta.setToOne();  // FIXME: this is wrong
             System.out.println("∆"+i+",S(0): " + delta);
             deltas.add(delta);
         }
@@ -137,9 +133,9 @@ public class ABS {
 
         // calculate first part of σ0 (Π di0^∆i,S(0)):
         Element pi_di0_pow_delta = pubParam.G2.newOneElement();
-        for (int i=0; i<set_union_omega.size(); i++) {
+        for (int i=0; i<privKey.size(); i++) {
             // Power di_0 with delta:
-            Element di_0_pow_delta = set_union_omega.get(i).di0.duplicate();
+            Element di_0_pow_delta = privKey.get(i).di0.duplicate();
             di_0_pow_delta.powZn(deltas.get(i));
             System.out.println("d"+i+"0^(∆"+i+",S(0)): "+di_0_pow_delta);
             // multiply to pi:
@@ -149,10 +145,10 @@ public class ABS {
 
         // calculate the second part of σ0 (Π H(i)^r'):
         Element pi_hashed_pow_rp = pubParam.G2.newElement();
-        for (int i=0; i<set_union_omega.size(); i++) {
+        for (int i=0; i<privKey.size(); i++) {
             // calculate hash^ri:
             Element hashed = pubParam.G2.newElement();
-            elementFromString(hashed, set_union_omega.get(i).attr);
+            elementFromString(hashed, privKey.get(i).attr);
             hashed.powZn(r_primes.get(i));
             // multiply to pi:
             pi_hashed_pow_rp.mul(hashed);
@@ -174,10 +170,10 @@ public class ABS {
 
         // calculate σi:
         sign.sigma_is = new ArrayList<>();
-        for (int i=0; i<set_union_omega.size(); i++) {
+        for (int i=0; i<privKey.size(); i++) {
             Element sigma_i = pubParam.G1.newElement();
             // Power di_1 with delta:
-            Element di_1_pow_delta = set_union_omega.get(i).di1.duplicate();
+            Element di_1_pow_delta = privKey.get(i).di1.duplicate();
             di_1_pow_delta.powZn(deltas.get(i));
             // Power g with r':
             Element g_pow_rp = pubParam.g.duplicate();
@@ -197,18 +193,14 @@ public class ABS {
         return sign;
     }
 
-    public void verify(String message, String attrs[], ABSSignatureComp sign) throws NoSuchAlgorithmException {
+    public void verify(String message, String [] attrs, ABSSignatureComp sign) throws NoSuchAlgorithmException {
 
         Element sigma0 = sign.sigma0;
         Element sigma_prime = sign.sigma_prime;
         ArrayList<Element> sigma_is = sign.sigma_is;
 
-        // create an array list appended with Ω':
-        ArrayList<String> total_attrs = new ArrayList<>(Arrays.asList(attrs));
-        //total_attrs.add(attrs[0]);
-
         // make sure the size is same:
-        if (sigma_is.size() != total_attrs.size()) {
+        if (sigma_is.size() != attrs.length) {
             System.out.println("Either attribute or signature is corrupted!");
             return;
         }
@@ -221,7 +213,7 @@ public class ABS {
         for (int i=0; i<sigma_is.size(); i++) {
             // calculate H(i):
             Element hashed = pubParam.G1.newElement();
-            elementFromString(hashed, total_attrs.get(i));    // the order should be same as sigma_is
+            elementFromString(hashed, attrs[i]);    // the order should be same as sigma_is
             // calculate e(H(i), σi):
             Element hi_sigmai_pair = pubParam.pairing.pairing(hashed, sigma_is.get(i));
             // multiply to pi:
@@ -239,6 +231,11 @@ public class ABS {
         Z_prime.div(denominator);
         System.out.println("Z' = "+Z_prime);
         System.out.println("Z  = "+pubParam.Z);
+        if (Z_prime.isEqual(pubParam.Z)) {
+            System.out.println("Verified signature is valid !!!");
+        } else {
+            System.out.println("Signature is invalid...");
+        }
 
     }
 
@@ -268,9 +265,8 @@ public class ABS {
     private static void lagrangeCoef(Element r, ArrayList<BigInteger> s, BigInteger i) {
         Element t = r.duplicate();
         r.setToOne();
-        for (int k = 0; k < s.size(); k++) {
-            BigInteger j = s.get(k);            // η (eta)
-            if (j.equals(i))
+        for (BigInteger j : s) {
+            if (j.equals(i))                    // η (eta)
                 continue;
             t.set(BigInteger.ZERO.subtract(j)); // t = -η
             r.mul(t);                           // r = -η
