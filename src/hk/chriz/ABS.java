@@ -117,9 +117,9 @@ public class ABS {
 
         // get the polynomial list with d random values:
         ArrayList <BigInteger> poly = new ArrayList<>();
-        for (int i=0; i<set_union_omega.size(); i++) {
-            //poly.add(pubParam.Zr.newRandomElement().toBigInteger());
-            poly.add(set_union_omega.get(i).qi.toBigInteger());
+        for (int i=0; i<set_union_omega.size()+1; i++) {
+            poly.add(pubParam.Zr.newRandomElement().toBigInteger());
+            //poly.add(set_union_omega.get(i).qi.toBigInteger());
             System.out.println("generated q("+i+") = "+poly.get(i));
         }
         System.out.println();
@@ -129,7 +129,8 @@ public class ABS {
         for (int i=0; i<set_union_omega.size(); i++) {
             Element delta = pubParam.Zr.newElement();
             lagrangeCoef(delta, poly, poly.get(i));
-            System.out.println("∆i,S(" + i + "): " + delta);
+            //delta.setToOne();  // FIXME: this is wrong
+            System.out.println("∆"+i+",S(0): " + delta);
             deltas.add(delta);
         }
         System.out.println();
@@ -140,7 +141,7 @@ public class ABS {
             // Power di_0 with delta:
             Element di_0_pow_delta = set_union_omega.get(i).di0.duplicate();
             di_0_pow_delta.powZn(deltas.get(i));
-            System.out.println("d"+i+"0^(∆i,S("+i+")): "+di_0_pow_delta);
+            System.out.println("d"+i+"0^(∆"+i+",S(0)): "+di_0_pow_delta);
             // multiply to pi:
             pi_di0_pow_delta.mul(di_0_pow_delta);
         }
